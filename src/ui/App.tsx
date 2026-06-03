@@ -115,11 +115,14 @@ export function App() {
 
   const handleFileClick = useCallback((filePath: string) => {
     setActiveFile(filePath)
+    // In single-file view only the active file is mounted, so there is
+    // nothing to scroll to — switching the active file is the navigation.
+    if (settings.fileView === 'single') return
     const el = document.getElementById(`file-${filePath}`)
     if (el) {
       el.scrollIntoView({ block: 'start' })
     }
-  }, [])
+  }, [settings.fileView])
 
   const handleViewedChange = useCallback((filePath: string, viewed: boolean) => {
     setViewed(filePath, viewed)
@@ -154,11 +157,13 @@ export function App() {
         diffOptions={{ staged: settings.staged, untracked: settings.untracked }}
         defaultTabSize={settings.defaultTabSize}
         browser={settings.browser}
+        fileView={settings.fileView}
         customMode={customMode}
         onDiffStyleChange={(style) => updateSettings({ diffStyle: style })}
         onDiffOptionsChange={(options) => updateSettings(options)}
         onDefaultTabSizeChange={(size) => updateSettings({ defaultTabSize: size })}
         onBrowserChange={(browser) => updateSettings({ browser })}
+        onFileViewChange={(view) => updateSettings({ fileView: view })}
         onCopyComments={copyAllComments}
       />
       <div className="app-body">
@@ -183,6 +188,9 @@ export function App() {
             defaultTabSize={settings.defaultTabSize}
             viewedFiles={viewedFiles}
             binaryFiles={binaryFileMap}
+            fileView={settings.fileView}
+            activeFile={activeFile}
+            onActiveFileChange={setActiveFile}
             onViewedChange={handleViewedChange}
             fileAnnotationsMap={fileAnnotationsMap}
             onAddComment={addComment}

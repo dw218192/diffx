@@ -11,6 +11,7 @@ export interface Settings {
   diffStyle: 'split' | 'unified'
   defaultTabSize: number
   browser?: string
+  fileView: 'list' | 'single'
 }
 
 const DEFAULTS: Settings = {
@@ -18,6 +19,7 @@ const DEFAULTS: Settings = {
   untracked: true,
   diffStyle: 'split',
   defaultTabSize: 4,
+  fileView: 'list',
 }
 
 export function loadSettings(): Settings {

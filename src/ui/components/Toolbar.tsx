@@ -14,11 +14,13 @@ interface ToolbarProps {
   diffOptions: DiffOptions
   defaultTabSize: number
   browser?: string
+  fileView: 'list' | 'single'
   customMode: boolean
   onDiffStyleChange: (style: 'split' | 'unified') => void
   onDiffOptionsChange: (options: DiffOptions) => void
   onDefaultTabSizeChange: (size: number) => void
   onBrowserChange: (browser: string) => void
+  onFileViewChange: (view: 'list' | 'single') => void
   onCopyComments: () => Promise<{ copied: boolean; text: string }>
 }
 
@@ -33,11 +35,13 @@ export function Toolbar({
   diffOptions,
   defaultTabSize,
   browser,
+  fileView,
   customMode,
   onDiffStyleChange,
   onDiffOptionsChange,
   onDefaultTabSizeChange,
   onBrowserChange,
+  onFileViewChange,
   onCopyComments,
 }: ToolbarProps) {
   const [copied, setCopied] = useState(false)
@@ -134,6 +138,16 @@ export function Toolbar({
                   </label>
                 </>
               )}
+              <label className="settings-item">
+                <input
+                  type="checkbox"
+                  checked={fileView === 'single'}
+                  onChange={(e) =>
+                    onFileViewChange(e.target.checked ? 'single' : 'list')
+                  }
+                />
+                Show one file at a time
+              </label>
               <div className="settings-item settings-item-spaced">
                 <span>Default tab size</span>
                 <select
