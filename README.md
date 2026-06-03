@@ -10,6 +10,14 @@ A local code review tool designed for the coding agent workflow. Review AI-gener
 npm install -g diffx-cli
 ```
 
+Or run it without a global install — `npx` fetches and runs the latest version
+in an isolated, throwaway cache, similar to `pipx run`:
+
+```bash
+npx diffx-cli            # npm
+pnpm dlx diffx-cli       # pnpm
+```
+
 ## Usage
 
 Run in any git repository:
