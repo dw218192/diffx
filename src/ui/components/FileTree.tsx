@@ -69,7 +69,26 @@ function buildTree(files: FileDiffMetadata[]): TreeNode[] {
   }
   sortNodes(root)
 
-  return root
+  return compactNodes(root)
+}
+
+// Collapse chains of single-child directories into one row, the way
+// GitHub/GitLab render file trees (e.g. `src/ui/components` as a single node).
+function compactNodes(nodes: TreeNode[]): TreeNode[] {
+  return nodes.map((node) => {
+    if (!node.isDir) return node
+    let merged = node
+    while (merged.children.length === 1 && merged.children[0].isDir) {
+      const child = merged.children[0]
+      merged = {
+        ...merged,
+        name: `${merged.name}/${child.name}`,
+        path: child.path,
+        children: child.children,
+      }
+    }
+    return { ...merged, children: compactNodes(merged.children) }
+  })
 }
 
 function inferChangeType(file: FileDiffMetadata, untrackedFiles: Set<string>): string {
