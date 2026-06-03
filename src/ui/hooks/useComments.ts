@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { DiffLineAnnotation } from '@pierre/diffs'
 import type { ReviewComment } from '../../types'
+import { copyText } from '../utils'
 
 const COMMENTS_KEY = ['comments']
 
@@ -124,7 +125,8 @@ export function useComments() {
 
   const copyAllComments = useCallback(async () => {
     const text = formatAllComments()
-    await navigator.clipboard.writeText(text)
+    const copied = await copyText(text)
+    return { copied, text }
   }, [formatAllComments])
 
   return {

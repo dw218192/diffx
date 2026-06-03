@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { GitBranch, Settings } from 'lucide-react'
 import type { DiffOptions } from '../hooks/useDiff'
+import { ManualCopyModal } from './ManualCopyModal'
 
 interface ToolbarProps {
   repoName: string
@@ -18,7 +19,7 @@ interface ToolbarProps {
   onDiffOptionsChange: (options: DiffOptions) => void
   onDefaultTabSizeChange: (size: number) => void
   onBrowserChange: (browser: string) => void
-  onCopyComments: () => Promise<void>
+  onCopyComments: () => Promise<{ copied: boolean; text: string }>
 }
 
 export function Toolbar({
@@ -40,13 +41,20 @@ export function Toolbar({
   onCopyComments,
 }: ToolbarProps) {
   const [copied, setCopied] = useState(false)
+  const [manualCopyText, setManualCopyText] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
 
   const handleCopy = async () => {
-    await onCopyComments()
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    const { copied: ok, text } = await onCopyComments()
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } else {
+      // Clipboard API and execCommand both unavailable — let the user copy
+      // the text by hand instead of silently dropping it.
+      setManualCopyText(text)
+    }
   }
 
   useEffect(() => {
@@ -166,6 +174,9 @@ export function Toolbar({
           {copied ? 'Copied!' : `Copy comments (${commentCount})`}
         </button>
       </div>
+      {manualCopyText !== null && (
+        <ManualCopyModal text={manualCopyText} onClose={() => setManualCopyText(null)} />
+      )}
     </div>
   )
 }
