@@ -6,6 +6,7 @@ import { useDiff } from './hooks/useDiff'
 import { useComments } from './hooks/useComments'
 import { useSettings } from './hooks/useSettings'
 import { useViewed } from './hooks/useViewed'
+import { useLiveReload } from './hooks/useLiveReload'
 import { Toolbar } from './components/Toolbar'
 import { DiffViewer } from './components/DiffViewer'
 import { FileTree } from './components/FileTree'
@@ -13,10 +14,16 @@ import { CommentTracker } from './components/CommentTracker'
 
 export function App() {
   const { settings, loaded, updateSettings } = useSettings()
-  const { patch, repoName, branch, customMode, binaryFiles, tabSizeMap, untrackedFiles, loading, error } = useDiff({
+  const { patch, repoName, branch, customMode, binaryFiles, tabSizeMap, untrackedFiles, loading, error, refetch } = useDiff({
     staged: settings.staged,
     untracked: settings.untracked,
   })
+  const { stale, reset: resetStale } = useLiveReload()
+
+  const handleReload = useCallback(() => {
+    refetch()
+    resetStale()
+  }, [refetch, resetStale])
   const { comments, addComment, removeComment, copyAllComments } =
     useComments()
   const [activeFile, setActiveFile] = useState<string | null>(null)
@@ -166,6 +173,14 @@ export function App() {
         onFileViewChange={(view) => updateSettings({ fileView: view })}
         onCopyComments={copyAllComments}
       />
+      {stale && (
+        <div className="reload-banner" role="status">
+          <span>The working tree changed since this diff was loaded.</span>
+          <button className="btn btn-sm btn-primary" onClick={handleReload}>
+            Reload diff
+          </button>
+        </div>
+      )}
       <div className="app-body">
         <aside className={`sidebar ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
           <FileTree

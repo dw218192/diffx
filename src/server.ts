@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
+import { watch, type FSWatcher } from 'node:fs'
 import { join, extname, resolve } from 'node:path'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import { serve } from '@hono/node-server'
 import { getGitDiff, getCustomGitDiff, getRepoName, getBranchName, getFileContent, isImageFile, getTabSizeForFiles, getUntrackedFilePaths } from './git.js'
 import { loadSettings, saveSettings } from './settings.js'
@@ -83,6 +85,70 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   const isCustomMode = !!customDiffArgs
   const store = commentStore ?? new InMemoryCommentStore()
   const viewedFiles = new Map<string, string>()
+
+  // --- Live reload: watch the working tree and notify connected clients ---
+  // Subscribers are SSE writer callbacks. The recursive fs.watch is created
+  // lazily on the first connection and torn down when the last client leaves,
+  // so there is zero watch overhead when nobody is reviewing.
+  const sseClients = new Set<(event: string) => void>()
+  let watcher: FSWatcher | null = null
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+  const broadcast = (event: string) => {
+    for (const send of sseClients) send(event)
+  }
+
+  const isNoise = (filename: string) =>
+    filename.startsWith('.git') ||
+    filename.includes('node_modules') ||
+    filename.startsWith('dist')
+
+  const ensureWatcher = () => {
+    if (watcher) return
+    try {
+      watcher = watch(process.cwd(), { recursive: true }, (_event, filename) => {
+        if (!filename) return
+        const name = filename.toString().replaceAll('\\', '/')
+        if (isNoise(name)) return
+        if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => broadcast('diff-changed'), 300)
+      })
+    } catch {
+      // Recursive watch unsupported on this platform — live reload is a
+      // progressive enhancement, so degrade silently.
+      watcher = null
+    }
+  }
+
+  const maybeStopWatcher = () => {
+    if (sseClients.size === 0 && watcher) {
+      watcher.close()
+      watcher = null
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+  }
+
+  app.get('/api/events', (c) => {
+    return streamSSE(c, async (stream) => {
+      const send = (event: string) => {
+        void stream.writeSSE({ event, data: event })
+      }
+      sseClients.add(send)
+      ensureWatcher()
+
+      stream.onAbort(() => {
+        sseClients.delete(send)
+        maybeStopWatcher()
+      })
+
+      // Hold the connection open with periodic keep-alive comments.
+      while (!stream.closed && !stream.aborted) {
+        await stream.sleep(30000)
+        await stream.writeSSE({ event: 'ping', data: 'ping' })
+      }
+    })
+  })
 
   app.get('/api/diff', (c) => {
     let patch: string

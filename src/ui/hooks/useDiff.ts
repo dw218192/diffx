@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export interface BinaryFileInfo {
   path: string
@@ -25,11 +25,11 @@ export function useDiff(options: DiffOptions) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const refetch = useCallback(() => {
     setLoading(true)
     setError(null)
 
-    fetch(`/api/diff?staged=${options.staged}&untracked=${options.untracked}`)
+    return fetch(`/api/diff?staged=${options.staged}&untracked=${options.untracked}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -39,7 +39,12 @@ export function useDiff(options: DiffOptions) {
       .finally(() => setLoading(false))
   }, [options.staged, options.untracked])
 
+  useEffect(() => {
+    refetch()
+  }, [refetch])
+
   return {
+    refetch,
     patch: data?.patch ?? null,
     repoName: data?.repoName ?? '',
     branch: data?.branch ?? '',
