@@ -13,6 +13,7 @@ const { values, positionals } = parseArgs({
     port: { type: 'string', short: 'p' },
     host: { type: 'string' },
     'no-open': { type: 'boolean', default: false },
+    'tab-shutdown': { type: 'boolean', default: false },
     help: { type: 'boolean' },
     version: { type: 'boolean', short: 'v' },
   },
@@ -29,6 +30,8 @@ Options:
   --host <host>      Host address to bind to (default: 127.0.0.1). Pass
                      0.0.0.0 to expose the server to the local network.
   --no-open          Don't open the browser automatically
+  --tab-shutdown     Exit when the review tab closes (no connected client),
+                     so the server tears itself down instead of orphaning
   -v, --version      Show version number
   -h, --help         Show this help message
 
@@ -66,7 +69,7 @@ const resolvedClientDir = existsSync(clientDir)
   ? clientDir
   : resolve(process.cwd(), 'dist/client')
 
-const { port: actualPort } = await startServer({ port, host, clientDir: resolvedClientDir, customDiffArgs })
+const { port: actualPort } = await startServer({ port, host, clientDir: resolvedClientDir, customDiffArgs, tabShutdown: values['tab-shutdown'] })
 
 const localUrl = `http://${host}:${actualPort}`
 

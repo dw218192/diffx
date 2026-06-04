@@ -80,7 +80,7 @@ function parseBinaryFiles(patch: string, untrackedFiles?: Set<string>): BinaryFi
   return binaryFiles
 }
 
-export function createApp(clientDir: string, customDiffArgs?: string[], commentStore?: CommentStore) {
+export function createApp(clientDir: string, customDiffArgs?: string[], commentStore?: CommentStore, tabShutdown = false) {
   const app = new Hono()
 
   app.onError((err, c) => {
@@ -98,6 +98,29 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   const sseClients = new Set<(event: string) => void>()
   let watcher: FSWatcher | null = null
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+  // --- Tab-bound shutdown (--tab-shutdown) ---
+  // Tie the server's lifetime to connected reviewers (the SSE clients tracked below), so closing the
+  // browser tab self-terminates the process. This removes teardown from the launching skill/agent — a
+  // backgrounded server otherwise orphans (its node child survives the task being stopped).
+  const STARTUP_GRACE_MS = 120_000 // exit if nobody opens the UI within this window
+  const IDLE_GRACE_MS = 15_000 // exit this long after the LAST tab closes (tolerates a refresh/reconnect)
+  let shutdownTimer: ReturnType<typeof setTimeout> | null = null
+  const armShutdown = (ms: number) => {
+    if (!tabShutdown) return
+    if (shutdownTimer) clearTimeout(shutdownTimer)
+    shutdownTimer = setTimeout(() => {
+      if (sseClients.size === 0) {
+        console.log('diffx: no active reviewer — shutting down')
+        process.exit(0)
+      }
+    }, ms)
+  }
+  const cancelShutdown = () => {
+    if (shutdownTimer) clearTimeout(shutdownTimer)
+    shutdownTimer = null
+  }
+  if (tabShutdown) armShutdown(STARTUP_GRACE_MS)
 
   const broadcast = (event: string) => {
     for (const send of sseClients) send(event)
@@ -140,11 +163,13 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
         void stream.writeSSE({ event, data: event })
       }
       sseClients.add(send)
+      cancelShutdown() // a reviewer is connected — cancel any pending tab-shutdown
       ensureWatcher()
 
       stream.onAbort(() => {
         sseClients.delete(send)
         maybeStopWatcher()
+        if (sseClients.size === 0) armShutdown(IDLE_GRACE_MS) // last tab closed → exit after the grace
       })
 
       // Hold the connection open with periodic keep-alive comments.
@@ -307,8 +332,9 @@ export function startServer(options: {
   host: string
   clientDir: string
   customDiffArgs?: string[]
+  tabShutdown?: boolean
 }): Promise<{ port: number }> {
-  const app = createApp(options.clientDir, options.customDiffArgs)
+  const app = createApp(options.clientDir, options.customDiffArgs, undefined, options.tabShutdown)
 
   return new Promise((resolve) => {
     const server = serve({
