@@ -14,7 +14,7 @@ import { CommentTracker } from './components/CommentTracker'
 
 export function App() {
   const { settings, loaded, updateSettings } = useSettings()
-  const { patch, repoName, branch, customMode, binaryFiles, tabSizeMap, untrackedFiles, loading, error, refetch } = useDiff({
+  const { patch, repoName, branch, customMode, diffArgs, binaryFiles, tabSizeMap, untrackedFiles, loading, error, refetch } = useDiff({
     staged: settings.staged,
     untracked: settings.untracked,
   })
@@ -41,6 +41,16 @@ export function App() {
       localStorage.setItem('diffx-sidebar-collapsed', String(sidebarCollapsed))
     } catch {}
   }, [sidebarCollapsed])
+
+  // Descriptive tab title so multiple review sessions are distinguishable:
+  // "Diffx Code Review: <repo> — <commit range | branch>".
+  useEffect(() => {
+    if (!repoName) return
+    const range = customMode ? diffArgs.join(' ') : branch
+    document.title = range
+      ? `Diffx Code Review: ${repoName} — ${range}`
+      : `Diffx Code Review: ${repoName}`
+  }, [repoName, branch, customMode, diffArgs])
 
   const untrackedSet = useMemo(() => new Set(untrackedFiles), [untrackedFiles])
 

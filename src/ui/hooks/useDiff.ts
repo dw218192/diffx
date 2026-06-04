@@ -10,6 +10,7 @@ interface DiffData {
   repoName: string
   branch: string
   customMode: boolean
+  diffArgs: string[]
   binaryFiles: BinaryFileInfo[]
   tabSizeMap: Record<string, number>
   untrackedFiles: string[]
@@ -49,6 +50,7 @@ export function useDiff(options: DiffOptions) {
     repoName: data?.repoName ?? '',
     branch: data?.branch ?? '',
     customMode: data?.customMode ?? false,
+    diffArgs: data?.diffArgs ?? [],
     binaryFiles: data?.binaryFiles ?? [],
     tabSizeMap: data?.tabSizeMap ?? {},
     untrackedFiles: data?.untrackedFiles ?? [],

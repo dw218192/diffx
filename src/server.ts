@@ -171,7 +171,8 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
     const binaryFiles = parseBinaryFiles(patch, untrackedSet)
     const filePaths = parseFilePaths(patch)
     const tabSizeMap = getTabSizeForFiles(filePaths)
-    return c.json({ patch, repoName, branch, customMode: isCustomMode, binaryFiles, tabSizeMap, untrackedFiles })
+    const diffArgs = isCustomMode ? (customDiffArgs ?? []) : []
+    return c.json({ patch, repoName, branch, customMode: isCustomMode, diffArgs, binaryFiles, tabSizeMap, untrackedFiles })
   })
 
   app.get('/api/file-content', (c) => {
