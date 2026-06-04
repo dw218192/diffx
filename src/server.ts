@@ -214,8 +214,13 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   })
 
   app.get('/api/comments', async (c) => {
+    // Optional ?status=open|resolved filter. Coding agents fetch
+    // ?status=open so they only act on unresolved threads; the UI omits it
+    // to show resolved threads too (collapsed).
+    const status = c.req.query('status')
     const comments = await store.getAll()
-    return c.json(comments)
+    const result = status ? comments.filter((cm) => cm.status === status) : comments
+    return c.json(result)
   })
 
   app.post('/api/comments', async (c) => {
@@ -245,10 +250,11 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
 
   app.post('/api/comments/:id/replies', async (c) => {
     const commentId = c.req.param('id')
-    const { body } = await c.req.json()
+    const { body, author } = await c.req.json()
     const reply = {
       id: crypto.randomUUID(),
       body,
+      author: author === 'user' ? ('user' as const) : ('agent' as const),
       createdAt: Date.now(),
     }
     const updated = await store.addReply(commentId, reply)

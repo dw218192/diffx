@@ -10,15 +10,15 @@ Fetch all review comments from the running diffx server, apply the requested cha
 
 ## What to do
 
-### 1. Fetch comments from the API
+### 1. Fetch unresolved comments from the API
 
-The diffx server is running locally. Check the earlier conversation context for the port diffx reported on startup. Fetch all comments:
+The diffx server is running locally. Check the earlier conversation context for the port diffx reported on startup. Fetch only unresolved (open) threads — resolved threads have already been handled and must not be touched:
 
 ```bash
-curl -s http://localhost:<port>/api/comments
+curl -s 'http://localhost:<port>/api/comments?status=open'
 ```
 
-Replace `<port>` with the port number diffx reported on startup (visible in the server log output).
+Replace `<port>` with the port number diffx reported on startup (visible in the server log output). (Omitting `?status=open` returns every comment, including resolved ones — only do that if you specifically need the full history.)
 
 The response is a JSON array of comment objects:
 
@@ -40,7 +40,7 @@ The response is a JSON array of comment objects:
 
 ### 2. Process each comment
 
-For each comment with `"status": "open"`, first determine the intent — is it a **change request** or a **question**?
+Every returned comment is unresolved. For each one, first determine the intent — is it a **change request** or a **question**?
 
 #### Change requests (e.g., "Rename x to parsedToken", "Extract this into a helper")
 

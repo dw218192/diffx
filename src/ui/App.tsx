@@ -24,7 +24,7 @@ export function App() {
     refetch()
     resetStale()
   }, [refetch, resetStale])
-  const { comments, addComment, removeComment, copyAllComments } =
+  const { comments, addComment, removeComment, resolveComment, unresolveComment, addReply, copyAllComments } =
     useComments()
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -210,6 +210,9 @@ export function App() {
             fileAnnotationsMap={fileAnnotationsMap}
             onAddComment={addComment}
             onDeleteComment={removeComment}
+            onResolveComment={resolveComment}
+            onUnresolveComment={unresolveComment}
+            onReplyComment={addReply}
           />
         </main>
       </div>

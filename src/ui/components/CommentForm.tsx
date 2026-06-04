@@ -3,9 +3,16 @@ import { useState, useRef, useEffect } from 'react'
 interface CommentFormProps {
   onSubmit: (body: string) => void
   onCancel: () => void
+  placeholder?: string
+  submitLabel?: string
 }
 
-export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
+export function CommentForm({
+  onSubmit,
+  onCancel,
+  placeholder = 'Leave a review comment...',
+  submitLabel = 'Comment',
+}: CommentFormProps) {
   const [body, setBody] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -37,7 +44,7 @@ export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Leave a review comment..."
+        placeholder={placeholder}
         rows={3}
       />
       <div className="comment-form-actions">
@@ -45,7 +52,7 @@ export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
           Cancel
         </button>
         <button className="btn btn-primary" onClick={handleSubmit} disabled={!body.trim()}>
-          Comment
+          {submitLabel}
         </button>
       </div>
     </div>
