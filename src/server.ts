@@ -109,11 +109,21 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   const armShutdown = (ms: number) => {
     if (!tabShutdown) return
     if (shutdownTimer) clearTimeout(shutdownTimer)
-    shutdownTimer = setTimeout(() => {
-      if (sseClients.size === 0) {
-        console.log('diffx: no active reviewer — shutting down')
-        process.exit(0)
+    shutdownTimer = setTimeout(async () => {
+      if (sseClients.size !== 0) return
+      // The tab is closed (or never opened) — hand the open review comments back to the caller on the way
+      // out, fenced so a backgrounded launcher can parse them from stdout, then exit. This makes "close the
+      // tab" the way the reviewer returns comments to the agent (the server's in-memory store is gone after).
+      try {
+        const open = (await store.getAll()).filter((cm) => cm.status === 'open')
+        console.log('<<<DIFFX_COMMENTS_JSON>>>')
+        console.log(JSON.stringify(open))
+        console.log('<<<END_DIFFX_COMMENTS>>>')
+        console.log(`diffx: review tab closed — emitted ${open.length} comment(s), shutting down`)
+      } catch (err) {
+        console.error('diffx: failed to emit comments on shutdown:', err)
       }
+      process.exit(0)
     }, ms)
   }
   const cancelShutdown = () => {
