@@ -82,6 +82,11 @@ function parseBinaryFiles(patch: string, untrackedFiles?: Set<string>): BinaryFi
 
 export function createApp(clientDir: string, customDiffArgs?: string[], commentStore?: CommentStore) {
   const app = new Hono()
+
+  app.onError((err, c) => {
+    console.error('[diffx] request error:', err)
+    return c.text('Internal Server Error', 500)
+  })
   const isCustomMode = !!customDiffArgs
   const store = commentStore ?? new InMemoryCommentStore()
   const viewedFiles = new Map<string, string>()
