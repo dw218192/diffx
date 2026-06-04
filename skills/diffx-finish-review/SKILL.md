@@ -12,13 +12,13 @@ Fetch all review comments from the running diffx server, apply the requested cha
 
 ### 1. Fetch unresolved comments from the API
 
-The diffx server is running locally. Check the earlier conversation context for the port diffx reported on startup. Fetch only unresolved (open) threads — resolved threads have already been handled and must not be touched:
+The diffx server runs locally on the **pinned port 3433** (set by `/diffx-start-review`). Fetch only unresolved (open) threads — resolved threads have already been handled and must not be touched:
 
 ```bash
-curl -s 'http://localhost:<port>/api/comments?status=open'
+curl -s 'http://localhost:3433/api/comments?status=open'
 ```
 
-Replace `<port>` with the port number diffx reported on startup (visible in the server log output). (Omitting `?status=open` returns every comment, including resolved ones — only do that if you specifically need the full history.)
+(If a non-default port was reported on startup, use that instead. Omitting `?status=open` returns every comment, including resolved ones — only do that if you specifically need the full history.)
 
 The response is a JSON array of comment objects:
 
@@ -51,12 +51,12 @@ Every returned comment is unresolved. For each one, first determine the intent �
 
 ```bash
 # Reply to the comment
-curl -s -X POST http://localhost:<port>/api/comments/<id>/replies \
+curl -s -X POST http://localhost:3433/api/comments/<id>/replies \
   -H "Content-Type: application/json" \
   -d '{"body": "Done. Renamed x to parsedToken."}'
 
 # Mark as resolved
-curl -s -X PUT http://localhost:<port>/api/comments/<id> \
+curl -s -X PUT http://localhost:3433/api/comments/<id> \
   -H "Content-Type: application/json" \
   -d '{"status": "resolved"}'
 ```
@@ -66,7 +66,7 @@ curl -s -X PUT http://localhost:<port>/api/comments/<id> \
 Just reply with an answer. Do **not** modify code or resolve the comment — leave it open for the user to read and follow up if needed.
 
 ```bash
-curl -s -X POST http://localhost:<port>/api/comments/<id>/replies \
+curl -s -X POST http://localhost:3433/api/comments/<id>/replies \
   -H "Content-Type: application/json" \
   -d '{"body": "A Map would work too, but we use a plain object here because..."}'
 ```
