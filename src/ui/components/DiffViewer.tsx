@@ -1,9 +1,8 @@
 import { memo, useMemo, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { FileDiffMetadata, DiffLineAnnotation, AnnotationSide } from '@pierre/diffs'
 import type { ReviewComment } from '../../types'
 import type { BinaryFileInfo } from '../hooks/useDiff'
-import { FileDiffCard } from './FileDiffCard'
+import { FileDiffCard, type PagerInfo } from './FileDiffCard'
 import { BinaryFileDiff } from './BinaryFileDiff'
 
 interface DiffViewerProps {
@@ -143,7 +142,7 @@ export const DiffViewer = memo(function DiffViewer({
   }, [isSingle, sortedFiles, onActiveFileChange])
 
   const renderFile = useCallback(
-    (file: FileDiffMetadata, index: number) => {
+    (file: FileDiffMetadata, index: number, pager?: PagerInfo) => {
       const filePath = file.name
       const binaryInfo = binaryFiles.get(filePath)
       if (binaryInfo) {
@@ -167,6 +166,7 @@ export const DiffViewer = memo(function DiffViewer({
           diffStyle={diffStyle}
           tabSize={tabSizeMap[filePath] ?? defaultTabSize}
           viewed={viewedFiles.has(filePath)}
+          pager={pager}
           onViewedChange={onViewedChange}
           onAddComment={onAddComment}
           onDeleteComment={onDeleteComment}
@@ -189,34 +189,14 @@ export const DiffViewer = memo(function DiffViewer({
 
   return (
     <div className="diff-viewer">
-      {isSingle && (
-        <div className="diff-file-nav">
-          <button
-            className="btn btn-sm"
-            onClick={() => goTo(-1)}
-            disabled={activeIndex <= 0}
-            title="Previous file ([)"
-            aria-label="Previous file"
-          >
-            <ChevronLeft size={14} />
-            Prev
-          </button>
-          <span className="diff-file-nav-counter">
-            File {activeIndex + 1} of {sortedFiles.length}
-          </span>
-          <button
-            className="btn btn-sm"
-            onClick={() => goTo(1)}
-            disabled={activeIndex >= sortedFiles.length - 1}
-            title="Next file (])"
-            aria-label="Next file"
-          >
-            Next
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
-      {isSingle ? renderFile(sortedFiles[activeIndex], activeIndex) : sortedFiles.map(renderFile)}
+      {isSingle
+        ? renderFile(sortedFiles[activeIndex], activeIndex, {
+            index: activeIndex,
+            total: sortedFiles.length,
+            onPrev: () => goTo(-1),
+            onNext: () => goTo(1),
+          })
+        : sortedFiles.map((file, index) => renderFile(file, index))}
     </div>
   )
 })

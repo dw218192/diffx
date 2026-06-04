@@ -1,5 +1,6 @@
 import { useState, memo } from 'react'
 import { FileDiff } from '@pierre/diffs/react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { DiffLineAnnotation, FileDiffMetadata, AnnotationSide } from '@pierre/diffs'
 import type { ReviewComment } from '../../types'
 import { CommentForm } from './CommentForm'
@@ -10,6 +11,13 @@ interface PendingComment {
   lineNumber: number
 }
 
+export interface PagerInfo {
+  index: number
+  total: number
+  onPrev: () => void
+  onNext: () => void
+}
+
 interface FileDiffCardProps {
   id?: string
   fileDiff: FileDiffMetadata
@@ -18,6 +26,7 @@ interface FileDiffCardProps {
   diffStyle: 'split' | 'unified'
   tabSize: number
   viewed: boolean
+  pager?: PagerInfo
   onViewedChange: (filePath: string, viewed: boolean) => void
   onAddComment: (filePath: string, side: AnnotationSide, lineNumber: number, lineContent: string, body: string) => void
   onDeleteComment: (id: string) => void
@@ -34,6 +43,7 @@ export const FileDiffCard = memo(function FileDiffCard({
   diffStyle,
   tabSize,
   viewed,
+  pager,
   onViewedChange,
   onAddComment,
   onDeleteComment,
@@ -42,6 +52,9 @@ export const FileDiffCard = memo(function FileDiffCard({
   onReplyComment,
 }: FileDiffCardProps) {
   const [pending, setPending] = useState<PendingComment | null>(null)
+
+  const additions = fileDiff.additionLines.length
+  const deletions = fileDiff.deletionLines.length
 
   const getLineContent = (side: AnnotationSide, lineNumber: number): string => {
     const lines = side === 'additions' ? fileDiff.additionLines : fileDiff.deletionLines
@@ -72,80 +85,107 @@ export const FileDiffCard = memo(function FileDiffCard({
       : []),
   ]
 
+  // Our own sticky header (the library's built-in header is disabled below).
+  // Sticking it lets you mark a file viewed without scrolling back up.
+  const header = (
+    <div className="fdc-header">
+      {pager && (
+        <div className="fdc-pager">
+          <button
+            className="btn btn-sm"
+            onClick={pager.onPrev}
+            disabled={pager.index <= 0}
+            title="Previous file ([)"
+            aria-label="Previous file"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={pager.onNext}
+            disabled={pager.index >= pager.total - 1}
+            title="Next file (])"
+            aria-label="Next file"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
+      <span className="fdc-filename" title={filePath}>
+        {filePath}
+      </span>
+      {pager && (
+        <span className="fdc-counter">
+          {pager.index + 1} / {pager.total}
+        </span>
+      )}
+      <span className="fdc-stats">
+        {additions > 0 && <span className="stat-additions">+{additions}</span>}
+        {deletions > 0 && <span className="stat-deletions">-{deletions}</span>}
+      </span>
+      <label className="viewed-label" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={viewed}
+          onChange={(e) => onViewedChange(filePath, e.target.checked)}
+        />
+        Viewed
+      </label>
+    </div>
+  )
+
   return (
     <div className={`file-diff-card ${viewed ? 'file-diff-viewed' : ''}`} id={id}>
-      {viewed ? (
-        <div className="file-diff-viewed-header">
-          <span className="file-diff-viewed-name">{filePath}</span>
-          <label className="viewed-label viewed-checked" onClick={(e) => e.stopPropagation()}>
-            <input
-              type="checkbox"
-              checked={viewed}
-              onChange={(e) => onViewedChange(filePath, e.target.checked)}
-            />
-            Viewed
-          </label>
-        </div>
-      ) : (
-        <>
-          <FileDiff<ReviewComment | { _pending: true }>
-            fileDiff={fileDiff}
-            options={{
-              diffStyle,
-              enableGutterUtility: true,
-              theme: { dark: 'github-dark', light: 'github-light' },
-              themeType: 'system',
-              unsafeCSS: `:host { --diffs-tab-size: ${tabSize}; }`,
-            }}
-            lineAnnotations={allAnnotations}
-            renderHeaderMetadata={() => (
-              <label className="viewed-label" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={viewed}
-                  onChange={(e) => onViewedChange(filePath, e.target.checked)}
-                />
-                Viewed
-              </label>
-            )}
-            renderAnnotation={(annotation) => {
-              if ('_pending' in annotation.metadata) {
-                return (
-                  <CommentForm
-                    onSubmit={(body) => {
-                      const lineContent = getLineContent(pending!.side, pending!.lineNumber)
-                      onAddComment(filePath, pending!.side, pending!.lineNumber, lineContent, body)
-                      setPending(null)
-                    }}
-                    onCancel={() => setPending(null)}
-                  />
-                )
-              }
+      {header}
+      {!viewed && (
+        <FileDiff<ReviewComment | { _pending: true }>
+          fileDiff={fileDiff}
+          options={{
+            diffStyle,
+            enableGutterUtility: true,
+            disableFileHeader: true,
+            theme: { dark: 'github-dark', light: 'github-light' },
+            themeType: 'system',
+            unsafeCSS: `:host { --diffs-tab-size: ${tabSize}; }`,
+          }}
+          lineAnnotations={allAnnotations}
+          renderAnnotation={(annotation) => {
+            if ('_pending' in annotation.metadata) {
               return (
-                <CommentBubble
-                  comment={annotation.metadata as ReviewComment}
-                  onDelete={onDeleteComment}
-                  onResolve={onResolveComment}
-                  onUnresolve={onUnresolveComment}
-                  onReply={onReplyComment}
+                <CommentForm
+                  onSubmit={(body) => {
+                    const lineContent = getLineContent(pending!.side, pending!.lineNumber)
+                    onAddComment(filePath, pending!.side, pending!.lineNumber, lineContent, body)
+                    setPending(null)
+                  }}
+                  onCancel={() => setPending(null)}
                 />
               )
-            }}
-            renderGutterUtility={(getHoveredLine) => (
-              <button
-                className="gutter-add-btn"
-                onClick={() => {
-                  const line = getHoveredLine()
-                  if (line) {
-                    setPending({ side: line.side, lineNumber: line.lineNumber })
-                  }
-                }}
-              >
-                +
-              </button>
-            )}
-          />
-        </>
+            }
+            return (
+              <CommentBubble
+                comment={annotation.metadata as ReviewComment}
+                onDelete={onDeleteComment}
+                onResolve={onResolveComment}
+                onUnresolve={onUnresolveComment}
+                onReply={onReplyComment}
+              />
+            )
+          }}
+          renderGutterUtility={(getHoveredLine) => (
+            <button
+              className="gutter-add-btn"
+              onClick={() => {
+                const line = getHoveredLine()
+                if (line) {
+                  setPending({ side: line.side, lineNumber: line.lineNumber })
+                }
+              }}
+            >
+              +
+            </button>
+          )}
+        />
       )}
     </div>
   )

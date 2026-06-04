@@ -411,34 +411,62 @@ body {
     gap: 16px;
 }
 
-.diff-file-nav {
+.file-diff-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    scroll-margin-top: 60px;
+}
+
+/* Sticky per-file header (our own; the library's built-in header is disabled) */
+.fdc-header {
     position: sticky;
-    top: 0;
-    z-index: 1;
+    top: 41px;
+    z-index: 5;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 12px;
+    gap: 10px;
+    padding: 8px 16px;
     background: var(--bg-secondary);
-    border: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: 6px 6px 0 0;
+    font-size: 13px;
+}
+
+.file-diff-viewed .fdc-header {
+    border-bottom: none;
     border-radius: 6px;
 }
 
-.diff-file-nav .btn-sm {
-    gap: 4px;
+.fdc-pager {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
 }
 
-.diff-file-nav-counter {
+.fdc-pager .btn-sm {
+    padding: 4px 6px;
+}
+
+.fdc-filename {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.fdc-counter {
+    flex-shrink: 0;
     font-size: 12px;
     color: var(--text-secondary);
 }
 
-.file-diff-card {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    scroll-margin-top: 60px;
+.fdc-stats {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+    font-size: 12px;
 }
 
 .file-diff-viewed {
