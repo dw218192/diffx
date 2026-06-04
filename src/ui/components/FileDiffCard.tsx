@@ -33,6 +33,7 @@ interface FileDiffCardProps {
   onResolveComment: (id: string) => void
   onUnresolveComment: (id: string) => void
   onReplyComment: (id: string, body: string) => void
+  onEditComment: (id: string, body: string) => void
 }
 
 export const FileDiffCard = memo(function FileDiffCard({
@@ -50,6 +51,7 @@ export const FileDiffCard = memo(function FileDiffCard({
   onResolveComment,
   onUnresolveComment,
   onReplyComment,
+  onEditComment,
 }: FileDiffCardProps) {
   const [pending, setPending] = useState<PendingComment | null>(null)
 
@@ -169,6 +171,7 @@ export const FileDiffCard = memo(function FileDiffCard({
                 onResolve={onResolveComment}
                 onUnresolve={onUnresolveComment}
                 onReply={onReplyComment}
+                onEdit={onEditComment}
               />
             )
           }}

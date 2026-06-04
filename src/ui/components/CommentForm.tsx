@@ -5,6 +5,7 @@ interface CommentFormProps {
   onCancel: () => void
   placeholder?: string
   submitLabel?: string
+  initialValue?: string
 }
 
 export function CommentForm({
@@ -12,12 +13,17 @@ export function CommentForm({
   onCancel,
   placeholder = 'Leave a review comment...',
   submitLabel = 'Comment',
+  initialValue = '',
 }: CommentFormProps) {
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(initialValue)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    textareaRef.current?.focus()
+    const el = textareaRef.current
+    if (!el) return
+    el.focus()
+    // Put the caret at the end when editing existing text.
+    el.setSelectionRange(el.value.length, el.value.length)
   }, [])
 
   const handleSubmit = () => {

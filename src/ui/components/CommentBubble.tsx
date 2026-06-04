@@ -10,15 +10,17 @@ interface CommentBubbleProps {
   onResolve: (id: string) => void
   onUnresolve: (id: string) => void
   onReply: (id: string, body: string) => void
+  onEdit: (id: string, body: string) => void
 }
 
-export function CommentBubble({ comment, onDelete, onResolve, onUnresolve, onReply }: CommentBubbleProps) {
+export function CommentBubble({ comment, onDelete, onResolve, onUnresolve, onReply, onEdit }: CommentBubbleProps) {
   const [, setTick] = useState(0)
   const isResolved = comment.status === 'resolved'
   // Whether a resolved thread has been manually expanded. Resolved threads
   // start (and re-collapse on resolve) as a one-line summary, like GitHub.
   const [expandedResolved, setExpandedResolved] = useState(false)
   const [replying, setReplying] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => setTick((t) => t + 1), 30000)
@@ -50,38 +52,62 @@ export function CommentBubble({ comment, onDelete, onResolve, onUnresolve, onRep
     <div className={`comment-bubble ${isResolved ? 'comment-resolved' : ''}`} id={`comment-${comment.id}`}>
       <div className="comment-bubble-header">
         <UserCircle size={18} className="comment-bubble-avatar" />
-        <span className="comment-bubble-time">{timeAgo(comment.createdAt)}</span>
+        <span className="comment-bubble-time">
+          {timeAgo(comment.createdAt)}
+          {comment.editedAt != null && (
+            <span className="comment-edited" title="This comment was edited">
+              {' '}· edited
+            </span>
+          )}
+        </span>
         {isResolved && (
           <span className="comment-bubble-resolved">
             <CheckCircle2 size={14} />
             Resolved
           </span>
         )}
-        <div className="comment-bubble-actions">
-          {isResolved ? (
-            <>
-              <button className="comment-bubble-action" onClick={() => setExpandedResolved(false)}>
-                Collapse
-              </button>
-              <button className="comment-bubble-action" onClick={() => onUnresolve(comment.id)}>
-                Unresolve
-              </button>
-            </>
-          ) : (
-            <button className="comment-bubble-action" onClick={handleResolve}>
-              Resolve
+        {!editing && (
+          <div className="comment-bubble-actions">
+            <button className="comment-bubble-action" onClick={() => setEditing(true)}>
+              Edit
             </button>
-          )}
-          <button
-            className="comment-bubble-delete"
-            onClick={() => onDelete(comment.id)}
-            title="Delete comment"
-          >
-            &times;
-          </button>
-        </div>
+            {isResolved ? (
+              <>
+                <button className="comment-bubble-action" onClick={() => setExpandedResolved(false)}>
+                  Collapse
+                </button>
+                <button className="comment-bubble-action" onClick={() => onUnresolve(comment.id)}>
+                  Unresolve
+                </button>
+              </>
+            ) : (
+              <button className="comment-bubble-action" onClick={handleResolve}>
+                Resolve
+              </button>
+            )}
+            <button
+              className="comment-bubble-delete"
+              onClick={() => onDelete(comment.id)}
+              title="Delete comment"
+            >
+              &times;
+            </button>
+          </div>
+        )}
       </div>
-      <div className="comment-bubble-body">{comment.body}</div>
+      {editing ? (
+        <CommentForm
+          initialValue={comment.body}
+          submitLabel="Save"
+          onSubmit={(body) => {
+            onEdit(comment.id, body)
+            setEditing(false)
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div className="comment-bubble-body">{comment.body}</div>
+      )}
       {comment.replies?.length > 0 && (
         <div className="comment-replies">
           {comment.replies.map((reply) => (

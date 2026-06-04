@@ -713,6 +713,10 @@ body {
 }
 
 /* Comment thread actions */
+.comment-edited {
+    font-style: italic;
+}
+
 .comment-bubble-actions {
     display: flex;
     align-items: center;

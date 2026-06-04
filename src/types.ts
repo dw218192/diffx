@@ -17,5 +17,6 @@ export interface ReviewComment {
   body: string
   status: 'open' | 'resolved'
   createdAt: number
+  editedAt?: number
   replies: CommentReply[]
 }

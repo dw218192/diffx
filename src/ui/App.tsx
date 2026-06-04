@@ -24,7 +24,7 @@ export function App() {
     refetch()
     resetStale()
   }, [refetch, resetStale])
-  const { comments, addComment, removeComment, resolveComment, unresolveComment, addReply, copyAllComments } =
+  const { comments, addComment, removeComment, resolveComment, unresolveComment, addReply, editComment, copyAllComments } =
     useComments()
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -223,6 +223,7 @@ export function App() {
             onResolveComment={resolveComment}
             onUnresolveComment={unresolveComment}
             onReplyComment={addReply}
+            onEditComment={editComment}
           />
         </main>
       </div>

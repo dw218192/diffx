@@ -23,7 +23,10 @@ export class InMemoryCommentStore implements CommentStore {
   async update(id: string, fields: { body?: string; status?: ReviewComment['status'] }): Promise<ReviewComment | null> {
     const comment = this.comments.find((c) => c.id === id)
     if (!comment) return null
-    if (fields.body !== undefined) comment.body = fields.body
+    if (fields.body !== undefined) {
+      comment.body = fields.body
+      comment.editedAt = Date.now()
+    }
     if (fields.status !== undefined) comment.status = fields.status
     return comment
   }
