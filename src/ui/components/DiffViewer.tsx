@@ -57,15 +57,15 @@ export const DiffViewer = memo(function DiffViewer({
 
   const isSingle = fileView === 'single'
 
-  // Resolve the active file index, defaulting to the first file when nothing
-  // is selected yet or the selection no longer exists in the diff.
+  // Index of the active file, defaulting to the first when nothing is selected
+  // yet or the selection no longer exists in the diff.
   const activeIndex = useMemo(() => {
-    if (!isSingle) return -1
     const i = sortedFiles.findIndex((f) => f.name === activeFile)
     return i >= 0 ? i : 0
-  }, [isSingle, sortedFiles, activeFile])
+  }, [sortedFiles, activeFile])
 
-  // Keep the sidebar highlight in sync when the active file was defaulted.
+  // In single-file view, keep the sidebar highlight in sync when the active
+  // file was defaulted (nothing selected / stale selection).
   useEffect(() => {
     if (!isSingle || sortedFiles.length === 0) return
     const resolved = sortedFiles[activeIndex]?.name
@@ -76,14 +76,18 @@ export const DiffViewer = memo(function DiffViewer({
     (delta: number) => {
       if (sortedFiles.length === 0) return
       const next = Math.min(sortedFiles.length - 1, Math.max(0, activeIndex + delta))
-      onActiveFileChange(sortedFiles[next].name)
+      const name = sortedFiles[next].name
+      onActiveFileChange(name)
+      // List view keeps every file mounted, so move by scrolling to the card.
+      if (!isSingle) {
+        document.getElementById(`file-${name}`)?.scrollIntoView({ block: 'start' })
+      }
     },
-    [activeIndex, sortedFiles, onActiveFileChange],
+    [isSingle, activeIndex, sortedFiles, onActiveFileChange],
   )
 
-  // GitLab-style file navigation: `[` previous file, `]` next file.
+  // `[` previous file, `]` next file (GitLab parity), in both views.
   useEffect(() => {
-    if (!isSingle) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const target = e.target as HTMLElement | null
@@ -99,7 +103,38 @@ export const DiffViewer = memo(function DiffViewer({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isSingle, goTo])
+  }, [goTo])
+
+  // List view: track the file at the top of the viewport so the sidebar
+  // highlight follows scrolling (GitHub behavior).
+  useEffect(() => {
+    if (isSingle || sortedFiles.length === 0) return
+    const tops = new Map<string, number>()
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const name = e.target.id.slice('file-'.length)
+          if (e.isIntersecting) tops.set(name, e.boundingClientRect.top)
+          else tops.delete(name)
+        }
+        let best: string | null = null
+        let bestTop = Infinity
+        for (const [name, top] of tops) {
+          if (top < bestTop) {
+            bestTop = top
+            best = name
+          }
+        }
+        if (best) onActiveFileChange(best)
+      },
+      { rootMargin: '-60px 0px -75% 0px' },
+    )
+    for (const f of sortedFiles) {
+      const el = document.getElementById(`file-${f.name}`)
+      if (el) observer.observe(el)
+    }
+    return () => observer.disconnect()
+  }, [isSingle, sortedFiles, onActiveFileChange])
 
   const renderFile = useCallback(
     (file: FileDiffMetadata, index: number) => {
@@ -143,15 +178,16 @@ export const DiffViewer = memo(function DiffViewer({
     )
   }
 
-  if (isSingle) {
-    return (
-      <div className="diff-viewer">
+  return (
+    <div className="diff-viewer">
+      {isSingle && (
         <div className="diff-file-nav">
           <button
             className="btn btn-sm"
             onClick={() => goTo(-1)}
             disabled={activeIndex <= 0}
             title="Previous file ([)"
+            aria-label="Previous file"
           >
             <ChevronLeft size={14} />
             Prev
@@ -164,15 +200,14 @@ export const DiffViewer = memo(function DiffViewer({
             onClick={() => goTo(1)}
             disabled={activeIndex >= sortedFiles.length - 1}
             title="Next file (])"
+            aria-label="Next file"
           >
             Next
             <ChevronRight size={14} />
           </button>
         </div>
-        {renderFile(sortedFiles[activeIndex], activeIndex)}
-      </div>
-    )
-  }
-
-  return <div className="diff-viewer">{sortedFiles.map(renderFile)}</div>
+      )}
+      {isSingle ? renderFile(sortedFiles[activeIndex], activeIndex) : sortedFiles.map(renderFile)}
+    </div>
+  )
 })
