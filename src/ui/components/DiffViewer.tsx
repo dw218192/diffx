@@ -13,6 +13,7 @@ interface DiffViewerProps {
   viewedFiles: Set<string>
   binaryFiles: Map<string, BinaryFileInfo>
   fileView: 'list' | 'single'
+  lineWrap: boolean
   activeFile: string | null
   onActiveFileChange: (filePath: string) => void
   onViewedChange: (filePath: string, viewed: boolean) => void
@@ -35,6 +36,7 @@ export const DiffViewer = memo(function DiffViewer({
   viewedFiles,
   binaryFiles,
   fileView,
+  lineWrap,
   activeFile,
   onActiveFileChange,
   onViewedChange,
@@ -167,6 +169,7 @@ export const DiffViewer = memo(function DiffViewer({
           annotations={fileAnnotationsMap.get(filePath) ?? emptyAnnotations}
           diffStyle={diffStyle}
           tabSize={tabSizeMap[filePath] ?? defaultTabSize}
+          lineWrap={lineWrap}
           viewed={viewedFiles.has(filePath)}
           pager={pager}
           onViewedChange={onViewedChange}
@@ -179,7 +182,7 @@ export const DiffViewer = memo(function DiffViewer({
         />
       )
     },
-    [binaryFiles, viewedFiles, fileAnnotationsMap, diffStyle, tabSizeMap, defaultTabSize, onViewedChange, onAddComment, onDeleteComment, onResolveComment, onUnresolveComment, onReplyComment, onEditComment],
+    [binaryFiles, viewedFiles, fileAnnotationsMap, diffStyle, tabSizeMap, defaultTabSize, lineWrap, onViewedChange, onAddComment, onDeleteComment, onResolveComment, onUnresolveComment, onReplyComment, onEditComment],
   )
 
   if (sortedFiles.length === 0) {

@@ -15,12 +15,14 @@ interface ToolbarProps {
   defaultTabSize: number
   browser?: string
   fileView: 'list' | 'single'
+  lineWrap: boolean
   customMode: boolean
   onDiffStyleChange: (style: 'split' | 'unified') => void
   onDiffOptionsChange: (options: DiffOptions) => void
   onDefaultTabSizeChange: (size: number) => void
   onBrowserChange: (browser: string) => void
   onFileViewChange: (view: 'list' | 'single') => void
+  onLineWrapChange: (wrap: boolean) => void
   onCopyComments: () => Promise<{ copied: boolean; text: string }>
 }
 
@@ -36,12 +38,14 @@ export function Toolbar({
   defaultTabSize,
   browser,
   fileView,
+  lineWrap,
   customMode,
   onDiffStyleChange,
   onDiffOptionsChange,
   onDefaultTabSizeChange,
   onBrowserChange,
   onFileViewChange,
+  onLineWrapChange,
   onCopyComments,
 }: ToolbarProps) {
   const [copied, setCopied] = useState(false)
@@ -147,6 +151,14 @@ export function Toolbar({
                   }
                 />
                 Show one file at a time
+              </label>
+              <label className="settings-item">
+                <input
+                  type="checkbox"
+                  checked={lineWrap}
+                  onChange={(e) => onLineWrapChange(e.target.checked)}
+                />
+                Wrap long lines
               </label>
               <div className="settings-item settings-item-spaced">
                 <span>Default tab size</span>

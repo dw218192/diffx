@@ -12,6 +12,7 @@ export interface Settings {
   defaultTabSize: number
   browser?: string
   fileView: 'list' | 'single'
+  lineWrap: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -20,6 +21,7 @@ const DEFAULTS: Settings = {
   diffStyle: 'split',
   defaultTabSize: 4,
   fileView: 'list',
+  lineWrap: false,
 }
 
 export function loadSettings(): Settings {

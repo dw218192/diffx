@@ -25,6 +25,7 @@ interface FileDiffCardProps {
   annotations: DiffLineAnnotation<ReviewComment>[]
   diffStyle: 'split' | 'unified'
   tabSize: number
+  lineWrap: boolean
   viewed: boolean
   pager?: PagerInfo
   onViewedChange: (filePath: string, viewed: boolean) => void
@@ -43,6 +44,7 @@ export const FileDiffCard = memo(function FileDiffCard({
   annotations,
   diffStyle,
   tabSize,
+  lineWrap,
   viewed,
   pager,
   onViewedChange,
@@ -146,6 +148,7 @@ export const FileDiffCard = memo(function FileDiffCard({
             diffStyle,
             enableGutterUtility: true,
             disableFileHeader: true,
+            overflow: lineWrap ? 'wrap' : 'scroll',
             theme: { dark: 'github-dark', light: 'github-light' },
             themeType: 'system',
             unsafeCSS: `:host { --diffs-tab-size: ${tabSize}; }`,

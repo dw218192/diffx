@@ -175,12 +175,14 @@ export function App() {
         defaultTabSize={settings.defaultTabSize}
         browser={settings.browser}
         fileView={settings.fileView}
+        lineWrap={settings.lineWrap}
         customMode={customMode}
         onDiffStyleChange={(style) => updateSettings({ diffStyle: style })}
         onDiffOptionsChange={(options) => updateSettings(options)}
         onDefaultTabSizeChange={(size) => updateSettings({ defaultTabSize: size })}
         onBrowserChange={(browser) => updateSettings({ browser })}
         onFileViewChange={(view) => updateSettings({ fileView: view })}
+        onLineWrapChange={(wrap) => updateSettings({ lineWrap: wrap })}
         onCopyComments={copyAllComments}
       />
       {stale && (
@@ -214,6 +216,7 @@ export function App() {
             viewedFiles={viewedFiles}
             binaryFiles={binaryFileMap}
             fileView={settings.fileView}
+            lineWrap={settings.lineWrap}
             activeFile={activeFile}
             onActiveFileChange={setActiveFile}
             onViewedChange={handleViewedChange}
