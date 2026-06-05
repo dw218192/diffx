@@ -24,6 +24,13 @@ export function App() {
     refetch()
     resetStale()
   }, [refetch, resetStale])
+
+  // Send the current open comments to the agent (emitted to the server's stdout)
+  // without closing the tab, so the review can iterate while the server stays up.
+  const handleFinishReview = useCallback(async () => {
+    const res = await fetch('/api/finish', { method: 'POST' })
+    return res.json() as Promise<{ count: number }>
+  }, [])
   const { comments, addComment, removeComment, resolveComment, unresolveComment, addReply, editComment, copyAllComments } =
     useComments()
   const [activeFile, setActiveFile] = useState<string | null>(null)
@@ -183,6 +190,7 @@ export function App() {
         onBrowserChange={(browser) => updateSettings({ browser })}
         onFileViewChange={(view) => updateSettings({ fileView: view })}
         onLineWrapChange={(wrap) => updateSettings({ lineWrap: wrap })}
+        onFinishReview={handleFinishReview}
         onCopyComments={copyAllComments}
       />
       {stale && (

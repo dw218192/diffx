@@ -20,45 +20,66 @@ diffx falls back to a *random* port if 3433 is busy (so a leftover server/open t
 powershell -NoProfile -Command "Get-NetTCPConnection -State Listen -LocalPort 3433 -EA SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }"
 ```
 
-### 2. Launch diffx (scoped to the change under review)
+### 2. Launch diffx (scoped to *this task's* change)
 
-**Scope the diff to what you just changed** — pass the git range that covers the change under review as
-`-- <range>`. Do NOT default to the whole working tree; review "all changes" only when that genuinely is the
-scope. Pick the range from context:
-- the change is committed on a feature branch → `-- main..HEAD` (or `-- <base-branch>..HEAD`) — the typical case
-- the last N commits → `-- HEAD~N`
-- only staged changes → `-- --staged`
-- uncommitted work-in-progress and that *is* the change → omit `--` (bare `diffx`, the working tree)
+**Scope the diff to exactly what _this task_ changed — not the whole branch.** `main..HEAD` (or
+`<base>..HEAD`) includes everything on the branch, which usually bundles earlier, already-reviewed, or
+unrelated commits — rarely what you want. Work out the precise delta this piece of work produced and pass
+it as `-- <range>`:
+- you committed N commits in this task → `-- HEAD~N..HEAD` (just those), or `-- <first-new-commit>^..HEAD`
+- uncommitted work-in-progress and that *is* the change → omit `--` (bare `diffx`, the working tree); `-- --staged` for staged-only
+- only fall back to `-- main..HEAD` when the **entire branch** genuinely is the change under review
+
+When unsure which commits are yours, check `git log` / what you created this session and review only those.
 
 Run it backgrounded, bound to the LAN on the pinned port, self-terminating:
 
 ```bash
-diffx --host 0.0.0.0 -p 3433 --no-open --tab-shutdown -- main..HEAD     # typical: feature branch vs main
+diffx --host 0.0.0.0 -p 3433 --no-open --tab-shutdown -- HEAD~2..HEAD    # e.g. the 2 commits this task added
 ```
 
 Everything after `--` is passed to `git diff`; keep the `--host 0.0.0.0 -p 3433 --no-open --tab-shutdown`
 prefix on whichever range you choose.
 
-- **`--tab-shutdown`** makes the server **emit the open comments and then exit when the reviewer closes the tab** (and exit after a startup grace if the UI is never opened). This is how the comments come back to you (step 4), and it means there is **no orphan to tear down** — a backgrounded diffx would otherwise survive the task being stopped.
-- **Pinned to port 3433** so the firewall rule is stable.
-- `--no-open` because the reviewer connects over the LAN, not on this machine.
-- **Firewall (prerequisite, already configured):** an inbound rule must allow TCP 3433. If missing, add it (PowerShell, admin):
+- **`--tab-shutdown`** exits the server when the reviewer closes the tab, so a backgrounded diffx leaves **no orphan**. Comments are delivered to you over the API (step 3), not via stdout.
+- **Pinned to port 3433** so the firewall rule is stable. `--no-open` because the reviewer is on the LAN, not this host.
+- **Firewall (prerequisite, already configured):** an inbound rule must allow TCP 3433. If missing (PowerShell, admin):
   `New-NetFirewallRule -DisplayName diffx-lan -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3433 -Profile Any`
 
-**Important:** Run diffx with the Bash tool `run_in_background: true` so the server stays alive while the user reviews; `--tab-shutdown` ends it when they're done.
+Run diffx with the Bash tool `run_in_background: true`.
 
-### 3. Tell the user
+### 3. Arm the finish notification (a second background task)
+
+Immediately launch a long-poll that **notifies you** the moment the reviewer sends a batch or closes the tab — also `run_in_background: true`:
+
+```bash
+curl -s http://localhost:3433/api/wait-finish
+```
+
+It blocks (no output) until a finish event, then completes with a JSON body — that completion is your push notification. Use `localhost` (you're on the same host as the server).
+
+### 4. Tell the user
 
 Get this host's LAN IPv4 (PowerShell: `Get-NetIPAddress -AddressFamily IPv4 | ? { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' }`), then tell the user the URL using that IP:
 
-> diffx is running for LAN review at **http://<LAN-IP>:3433** (substitute the IPv4 from above). Leave inline comments, then **close the tab when you're done** — your comments come straight back to me and I'll apply them. (Reachable by anyone on the LAN while the tab is open.)
+> diffx is running for LAN review at **http://<LAN-IP>:3433** (substitute the IPv4 from above). Leave inline comments. Click **"Send to agent"** to have me act on a batch while you keep reviewing, or just **close the tab when you're done** — either way your comments come straight to me. (Reachable by anyone on the LAN while the tab is open.)
 
 Keep it brief.
 
-### 4. Apply the comments when the tab closes
+### 5. Process each round when the wait-finish task completes
 
-Closing the tab is the "done" signal: the server emits the open comments and exits, **completing the background task you launched in step 2**. When you get that completion notification, read the task's output, take the JSON array between `<<<DIFFX_COMMENTS_JSON>>>` and `<<<END_DIFFX_COMMENTS>>>`, and process each comment (fields: `filePath`, `side` = `additions`/`deletions`, `lineNumber`, `lineContent`, `body`):
+When the **wait-finish** background task finishes, read its output — a JSON object `{ "event": ..., "comments": [...] }`:
+
+- **`"event": "finish"`** — the reviewer clicked **Send to agent**; the **server is still up**. Apply the comments, reply/resolve each over the live API (the reviewer sees it in real time), then **re-arm** by launching `curl -s http://localhost:3433/api/wait-finish` again (`run_in_background`) and keep going.
+- **`"event": "closed"`** — the reviewer **closed the tab**; this is the **final** round and the server is exiting. Apply the comments and give a brief summary — do **not** call the API (it's gone) and do **not** re-arm.
+- **`"event": "aborted"`** — the poll was cancelled (rare); re-arm if the review is still open.
+
+Each comment has `filePath`, `side` (`additions`/`deletions`), `lineNumber`, `lineContent`, `body`:
 - **change request** ("rename x to count", "extract this helper") → read `filePath`, locate the code via `lineContent`, make the edit.
-- **question** ("why not a Map here?") → answer it in your summary; don't change code.
+- **question** ("why not a Map here?") → answer it; don't change code.
 
-The server is already gone (no API to reply/resolve against), so just **apply the changes and give the user a brief summary** — how many edits you made and any questions you answered. Empty array → tell them there were no comments. A comment can still send the work back to an earlier phase (new ADR / fix), same as any review finding.
+While the server is up (a `finish` round), respond on each comment so the reviewer sees it live:
+- reply: `curl -s -X POST http://localhost:3433/api/comments/<id>/replies -H 'Content-Type: application/json' -d '{"body":"<your reply>","author":"agent"}'`
+- resolve: `curl -s -X PUT http://localhost:3433/api/comments/<id> -H 'Content-Type: application/json' -d '{"status":"resolved"}'`
+
+Empty `comments` → nothing to do this round. (At any time the server is up you can also just `GET http://localhost:3433/api/comments?status=open` if you need to re-fetch.) A comment can still send the work back to an earlier phase (new ADR / fix), same as any review finding.

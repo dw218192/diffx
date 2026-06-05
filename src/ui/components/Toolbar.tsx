@@ -23,6 +23,7 @@ interface ToolbarProps {
   onBrowserChange: (browser: string) => void
   onFileViewChange: (view: 'list' | 'single') => void
   onLineWrapChange: (wrap: boolean) => void
+  onFinishReview: () => Promise<{ count: number }>
   onCopyComments: () => Promise<{ copied: boolean; text: string }>
 }
 
@@ -46,10 +47,12 @@ export function Toolbar({
   onBrowserChange,
   onFileViewChange,
   onLineWrapChange,
+  onFinishReview,
   onCopyComments,
 }: ToolbarProps) {
   const [copied, setCopied] = useState(false)
   const [manualCopyText, setManualCopyText] = useState<string | null>(null)
+  const [sentCount, setSentCount] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
 
@@ -63,6 +66,12 @@ export function Toolbar({
       // the text by hand instead of silently dropping it.
       setManualCopyText(text)
     }
+  }
+
+  const handleFinish = async () => {
+    const { count } = await onFinishReview()
+    setSentCount(count)
+    setTimeout(() => setSentCount(null), 2500)
   }
 
   useEffect(() => {
@@ -192,6 +201,14 @@ export function Toolbar({
             </div>
           )}
         </div>
+        <button
+          className="btn btn-sm"
+          onClick={handleFinish}
+          disabled={commentCount === 0}
+          title="Send the current comments to the agent without closing the tab — keep reviewing"
+        >
+          {sentCount !== null ? `Sent ${sentCount}` : 'Send to agent'}
+        </button>
         <button
           className="btn btn-primary btn-sm"
           onClick={handleCopy}

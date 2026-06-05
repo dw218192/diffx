@@ -99,38 +99,32 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   let watcher: FSWatcher | null = null
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+  // The current open review comments. Delivered to a backgrounded agent through
+  // the /api/wait-finish long-poll (below) — both the "Send to agent" button and
+  // tab-close go through this single channel; there is no stdout emit.
+  const getOpenComments = async () => (await store.getAll()).filter((cm) => cm.status === 'open')
+
+  // Long-poll waiters for /api/wait-finish. A finish event resolves all of them,
+  // pushing the open comments to whoever holds the request — a real notification
+  // without the server exiting.
+  //   'finish' → the reviewer clicked "Send to agent"; the server stays up.
+  //   'closed' → the review tab was closed; this is the final round.
+  type FinishEvent = { event: 'finish' | 'closed'; comments: Awaited<ReturnType<typeof getOpenComments>> }
+  const finishWaiters = new Set<(e: FinishEvent) => void>()
+  const triggerFinish = (e: FinishEvent) => {
+    for (const w of finishWaiters) w(e)
+    finishWaiters.clear()
+  }
+
   // --- Tab-bound shutdown (--tab-shutdown) ---
-  // Tie the server's lifetime to connected reviewers (the SSE clients tracked below), so closing the
-  // browser tab self-terminates the process. This removes teardown from the launching skill/agent — a
-  // backgrounded server otherwise orphans (its node child survives the task being stopped).
-  const STARTUP_GRACE_MS = 120_000 // exit if nobody opens the UI within this window
-  const IDLE_GRACE_MS = 15_000 // exit this long after the LAST tab closes (tolerates a refresh/reconnect)
-  let shutdownTimer: ReturnType<typeof setTimeout> | null = null
-  const armShutdown = (ms: number) => {
+  // Closing the review tab ends its SSE stream; deliver the final comments
+  // through the same finish channel, then exit so a backgrounded server doesn't
+  // orphan. A short window lets the wait-finish response flush before exit.
+  const closeReview = async () => {
     if (!tabShutdown) return
-    if (shutdownTimer) clearTimeout(shutdownTimer)
-    shutdownTimer = setTimeout(async () => {
-      if (sseClients.size !== 0) return
-      // The tab is closed (or never opened) — hand the open review comments back to the caller on the way
-      // out, fenced so a backgrounded launcher can parse them from stdout, then exit. This makes "close the
-      // tab" the way the reviewer returns comments to the agent (the server's in-memory store is gone after).
-      try {
-        const open = (await store.getAll()).filter((cm) => cm.status === 'open')
-        console.log('<<<DIFFX_COMMENTS_JSON>>>')
-        console.log(JSON.stringify(open))
-        console.log('<<<END_DIFFX_COMMENTS>>>')
-        console.log(`diffx: review tab closed — emitted ${open.length} comment(s), shutting down`)
-      } catch (err) {
-        console.error('diffx: failed to emit comments on shutdown:', err)
-      }
-      process.exit(0)
-    }, ms)
+    triggerFinish({ event: 'closed', comments: await getOpenComments() })
+    setTimeout(() => process.exit(0), 250)
   }
-  const cancelShutdown = () => {
-    if (shutdownTimer) clearTimeout(shutdownTimer)
-    shutdownTimer = null
-  }
-  if (tabShutdown) armShutdown(STARTUP_GRACE_MS)
 
   const broadcast = (event: string) => {
     for (const send of sseClients) send(event)
@@ -173,13 +167,12 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
         void stream.writeSSE({ event, data: event })
       }
       sseClients.add(send)
-      cancelShutdown() // a reviewer is connected — cancel any pending tab-shutdown
       ensureWatcher()
 
       stream.onAbort(() => {
         sseClients.delete(send)
         maybeStopWatcher()
-        if (sseClients.size === 0) armShutdown(IDLE_GRACE_MS) // last tab closed → exit after the grace
+        if (sseClients.size === 0) void closeReview() // last tab closed → final finish + exit
       })
 
       // Hold the connection open with periodic keep-alive comments.
@@ -252,6 +245,33 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
       viewedFiles.delete(filePath)
     }
     return c.json({ ok: true })
+  })
+
+  // "Send to agent" (finish-without-exiting): push the current open comments to
+  // any waiting /api/wait-finish poll and keep the server running, so the agent
+  // applies them and replies/resolves via the live API while the reviewer keeps
+  // iterating. Complements --tab-shutdown rather than replacing it.
+  app.post('/api/finish', async (c) => {
+    const comments = await getOpenComments()
+    triggerFinish({ event: 'finish', comments })
+    return c.json({ count: comments.length })
+  })
+
+  // Long-poll: a backgrounded agent holds this request open and is notified the
+  // instant a finish event fires — the "Send to agent" button (event 'finish',
+  // server stays up) or tab-close (event 'closed', the final round) — receiving
+  // the open comments in the response. No polling, no stdout, no exit required
+  // for the iterative path.
+  app.get('/api/wait-finish', async (c) => {
+    const result = await new Promise<FinishEvent | { event: 'aborted'; comments: [] }>((resolve) => {
+      const waiter = (e: FinishEvent) => resolve(e)
+      finishWaiters.add(waiter)
+      c.req.raw.signal.addEventListener('abort', () => {
+        finishWaiters.delete(waiter)
+        resolve({ event: 'aborted', comments: [] })
+      })
+    })
+    return c.json(result)
   })
 
   app.get('/api/comments', async (c) => {
