@@ -7,6 +7,7 @@ import { useComments } from './hooks/useComments'
 import { useSettings } from './hooks/useSettings'
 import { useViewed } from './hooks/useViewed'
 import { useLiveReload } from './hooks/useLiveReload'
+import { useReviewerPresence } from './hooks/useReviewerPresence'
 import { Toolbar } from './components/Toolbar'
 import { DiffViewer } from './components/DiffViewer'
 import { FileTree } from './components/FileTree'
@@ -19,6 +20,7 @@ export function App() {
     untracked: settings.untracked,
   })
   const { stale, reset: resetStale } = useLiveReload()
+  useReviewerPresence()
 
   const handleReload = useCallback(() => {
     refetch()

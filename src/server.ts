@@ -117,13 +117,48 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   }
 
   // --- Tab-bound shutdown (--tab-shutdown) ---
-  // Closing the review tab ends its SSE stream; deliver the final comments
-  // through the same finish channel, then exit so a backgrounded server doesn't
-  // orphan. A short window lets the wait-finish response flush before exit.
+  // Closing the review tab should tear the server down so a backgrounded
+  // process doesn't orphan. A clean tab-close ends the SSE stream (onAbort),
+  // but over a LAN a lid-close or Wi-Fi drop leaves a half-open socket with no
+  // FIN — onAbort never fires, the server lingers, and its in-memory comments
+  // are lost. So a departed reviewer is detected three ways, all funneling
+  // through one closeReview() that flushes open comments before exit:
+  //   1. onAbort   — clean SSE close (fast, best-effort; the original path).
+  //   2. beacon    — navigator.sendBeacon('/api/finish?closed=1') on pagehide.
+  //   3. heartbeat — UI POSTs /api/heartbeat every 5s; we exit if none for >12s.
+  let everConnected = false // don't exit before the UI ever opens (agent-only polling keeps us alive)
+  let closing = false // idempotent — the three triggers can race
+  let lastHeartbeat = 0
+  // If the tab closes while no wait-finish poll is held (agent between rounds),
+  // the comments are stashed here so the next poll returns them immediately.
+  let stashedClosed: FinishEvent | null = null
+
   const closeReview = async () => {
-    if (!tabShutdown) return
-    triggerFinish({ event: 'closed', comments: await getOpenComments() })
-    setTimeout(() => process.exit(0), 250)
+    if (!tabShutdown || closing) return
+    closing = true
+    const comments = await getOpenComments()
+    if (finishWaiters.size > 0) {
+      // An agent is holding a wait-finish poll: deliver now, give the response
+      // a beat to flush, then exit.
+      triggerFinish({ event: 'closed', comments })
+      setTimeout(() => process.exit(0), 250)
+    } else {
+      // No poll held. Stash the comments so the next wait-finish hands them
+      // over, and exit after a grace long enough for the agent to come back.
+      stashedClosed = { event: 'closed', comments }
+      setTimeout(() => process.exit(0), 10_000)
+    }
+  }
+
+  // Heartbeat monitor: once a reviewer has been seen, reap the server if the
+  // beats stop (a half-open socket that onAbort never noticed).
+  if (tabShutdown) {
+    const HEARTBEAT_TIMEOUT_MS = 12_000
+    const timer = setInterval(() => {
+      if (closing || !everConnected || !lastHeartbeat) return
+      if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) void closeReview()
+    }, 3_000)
+    timer.unref?.()
   }
 
   const broadcast = (event: string) => {
@@ -167,6 +202,7 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
         void stream.writeSSE({ event, data: event })
       }
       sseClients.add(send)
+      everConnected = true // a reviewer's UI has opened
       ensureWatcher()
 
       stream.onAbort(() => {
@@ -175,9 +211,11 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
         if (sseClients.size === 0) void closeReview() // last tab closed → final finish + exit
       })
 
-      // Hold the connection open with periodic keep-alive comments.
+      // Hold the connection open with periodic keep-alive comments. A 10s ping
+      // (paired with TCP keepalive on the socket) makes a dead LAN peer surface
+      // sooner — a failed write trips onAbort instead of lingering for minutes.
       while (!stream.closed && !stream.aborted) {
-        await stream.sleep(30000)
+        await stream.sleep(10000)
         await stream.writeSSE({ event: 'ping', data: 'ping' })
       }
     })
@@ -252,9 +290,23 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   // applies them and replies/resolves via the live API while the reviewer keeps
   // iterating. Complements --tab-shutdown rather than replacing it.
   app.post('/api/finish', async (c) => {
+    if (c.req.query('closed') === '1') {
+      // Beacon from pagehide: the reviewer's tab is going away. Route through
+      // closeReview so a half-open socket can't strand the final comments.
+      await closeReview()
+      return c.json({ ok: true })
+    }
     const comments = await getOpenComments()
     triggerFinish({ event: 'finish', comments })
     return c.json({ count: comments.length })
+  })
+
+  // Reviewer liveness beat (see the --tab-shutdown notes above). Recording the
+  // beat marks the UI as present; the monitor reaps the server when beats stop.
+  app.post('/api/heartbeat', (c) => {
+    everConnected = true
+    lastHeartbeat = Date.now()
+    return c.json({ ok: true })
   })
 
   // Long-poll: a backgrounded agent holds this request open and is notified the
@@ -263,6 +315,14 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   // the open comments in the response. No polling, no stdout, no exit required
   // for the iterative path.
   app.get('/api/wait-finish', async (c) => {
+    // A tab-close that found no poll held stashed its comments here; hand them
+    // over right away and let the (already-scheduled) exit wind down sooner.
+    if (stashedClosed) {
+      const stashed = stashedClosed
+      stashedClosed = null
+      if (closing) setTimeout(() => process.exit(0), 250)
+      return c.json(stashed)
+    }
     const result = await new Promise<FinishEvent | { event: 'aborted'; comments: [] }>((resolve) => {
       const waiter = (e: FinishEvent) => resolve(e)
       finishWaiters.add(waiter)
@@ -373,6 +433,12 @@ export function startServer(options: {
       hostname: options.host,
     }, (info) => {
       resolve({ port: info.port })
+    })
+    // Enable TCP keepalive so a dropped LAN peer (lid close / Wi-Fi drop, no
+    // FIN) surfaces as a dead socket in seconds rather than the OS default of
+    // many minutes — the kernel-level half of the heartbeat/ping detection.
+    ;(server as unknown as import('node:net').Server).on('connection', (socket) => {
+      socket.setKeepAlive(true, 10_000)
     })
   })
 }
