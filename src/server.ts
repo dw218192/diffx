@@ -135,9 +135,13 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
   // FIN — onAbort never fires, the server lingers, and its in-memory comments
   // are lost. So a departed reviewer is detected three ways, all funneling
   // through one closeReview() that flushes open comments before exit:
-  //   1. onAbort   — clean SSE close (fast, best-effort; the original path).
+  //   1. onAbort   — SSE close: fires on a clean tab-close and, via the stream's
+  //                  10s ping + TCP keepalive, on a half-open socket too. The
+  //                  primary signal whenever an SSE stream is connected.
   //   2. beacon    — navigator.sendBeacon('/api/finish?closed=1') on pagehide.
-  //   3. heartbeat — UI POSTs /api/heartbeat every 5s; we exit if none for >12s.
+  //   3. heartbeat — UI POSTs /api/heartbeat every 5s; only a fallback for when
+  //                  no SSE stream connected (see the monitor below for why it
+  //                  must not fire while one is open).
   let everConnected = false // don't exit before the UI ever opens (agent-only polling keeps us alive)
   let closing = false // idempotent — the three triggers can race
   let lastHeartbeat = 0
@@ -162,12 +166,18 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
     }
   }
 
-  // Heartbeat monitor: once a reviewer has been seen, reap the server if the
-  // beats stop (a half-open socket that onAbort never noticed).
+  // Heartbeat monitor: a fallback for when the UI loaded but never established
+  // an SSE stream (e.g. a proxy ate /api/events) — there, a stopped beat is the
+  // only "tab gone" signal. While an SSE client IS connected it stays the
+  // authoritative presence signal (its 10s ping + TCP keepalive trip onAbort on
+  // a real or half-open close), so we must NOT reap on the heartbeat here:
+  // browsers throttle the 5s beat to ~once/minute in a backgrounded tab, which
+  // would otherwise reap an actively-open-but-hidden review tab.
   if (tabShutdown) {
     const HEARTBEAT_TIMEOUT_MS = 12_000
     const timer = setInterval(() => {
       if (closing || !everConnected || !lastHeartbeat) return
+      if (sseClients.size > 0) return
       if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) void closeReview()
     }, 3_000)
     timer.unref?.()
