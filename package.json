@@ -1,6 +1,6 @@
 {
   "name": "diffx-cli",
-  "version": "0.12.1",
+  "version": "0.14.0",
   "description": "Local code review tool for git diffs with a GitHub PR-like web UI",
   "type": "module",
   "license": "MIT",
@@ -45,7 +45,7 @@
   "devDependencies": {
     "@changesets/changelog-git": "^0.2.1",
     "@changesets/cli": "^2.30.0",
-    "@pierre/diffs": "^1.1.11",
+    "@pierre/diffs": "^1.2.9",
     "@types/node": "^25.5.2",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",

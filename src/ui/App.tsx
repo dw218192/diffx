@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { parsePatchFiles } from '@pierre/diffs'
+import { Virtualizer } from '@pierre/diffs/react'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import type { ReviewComment } from '../types'
 import { useDiff } from './hooks/useDiff'
@@ -8,6 +9,7 @@ import { useSettings } from './hooks/useSettings'
 import { useViewed } from './hooks/useViewed'
 import { useLiveReload } from './hooks/useLiveReload'
 import { useReviewerPresence } from './hooks/useReviewerPresence'
+import { useFullDiffs, fileKey } from './hooks/useFullDiffs'
 import { Toolbar } from './components/Toolbar'
 import { DiffViewer } from './components/DiffViewer'
 import { FileTree } from './components/FileTree'
@@ -43,8 +45,6 @@ export function App() {
       return false
     }
   })
-  const diffViewerRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     try {
       localStorage.setItem('diffx-sidebar-collapsed', String(sidebarCollapsed))
@@ -92,6 +92,12 @@ export function App() {
       return []
     }
   }, [patch, binaryFiles])
+
+  const fullFiles = useFullDiffs(patch, files, { staged: settings.staged, untracked: settings.untracked })
+  const displayFiles = useMemo(() => {
+    if (fullFiles.size === 0) return files
+    return files.map((f) => fullFiles.get(fileKey(f)) ?? f)
+  }, [files, fullFiles])
 
   const { viewedFiles, setViewed } = useViewed(files)
 
@@ -217,27 +223,29 @@ export function App() {
           />
           {!sidebarCollapsed && <CommentTracker comments={comments} />}
         </aside>
-        <main className="main" ref={diffViewerRef}>
-          <DiffViewer
-            files={files}
-            diffStyle={settings.diffStyle}
-            tabSizeMap={tabSizeMap}
-            defaultTabSize={settings.defaultTabSize}
-            viewedFiles={viewedFiles}
-            binaryFiles={binaryFileMap}
-            fileView={settings.fileView}
-            lineWrap={settings.lineWrap}
-            activeFile={activeFile}
-            onActiveFileChange={setActiveFile}
-            onViewedChange={handleViewedChange}
-            fileAnnotationsMap={fileAnnotationsMap}
-            onAddComment={addComment}
-            onDeleteComment={removeComment}
-            onResolveComment={resolveComment}
-            onUnresolveComment={unresolveComment}
-            onReplyComment={addReply}
-            onEditComment={editComment}
-          />
+        <main className="main">
+          <Virtualizer className="main-scroll" contentClassName="main-content">
+            <DiffViewer
+              files={displayFiles}
+              diffStyle={settings.diffStyle}
+              tabSizeMap={tabSizeMap}
+              defaultTabSize={settings.defaultTabSize}
+              viewedFiles={viewedFiles}
+              binaryFiles={binaryFileMap}
+              fileView={settings.fileView}
+              lineWrap={settings.lineWrap}
+              activeFile={activeFile}
+              onActiveFileChange={setActiveFile}
+              onViewedChange={handleViewedChange}
+              fileAnnotationsMap={fileAnnotationsMap}
+              onAddComment={addComment}
+              onDeleteComment={removeComment}
+              onResolveComment={resolveComment}
+              onUnresolveComment={unresolveComment}
+              onReplyComment={addReply}
+              onEditComment={editComment}
+            />
+          </Virtualizer>
         </main>
       </div>
     </div>
